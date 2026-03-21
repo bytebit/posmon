@@ -1,0 +1,27 @@
+{
+  "token_id": 5382694,
+  "tick": -199577,
+  "tick_lower": -199740,
+  "tick_upper": -199440,
+  "in_range": true,
+  "last_in_range": true,
+  "last_checked_utc": "2026-03-21T16:37:13.727552+00:00",
+  "last_error": "Could not format invalid value [{'inputs': [], 'name': 'symbol', 'outputs': [{'internalType': 'string', 'name': '', 'type': 'string'}], 'stateMutability': 'view', 'type': 'function'}, {'inputs': [], 'name': 'symbol', 'outputs': [{'internalType': 'bytes32', 'name': '', 'type': 'bytes32'}], 'stateMutability': 'view', 'type': 'function'}] as field 'abi'",
+  "last_error_utc": "2026-03-21T16:31:11.165485+00:00",
+  "positions": {
+    "5382694": {
+      "token_id": 5382694,
+      "tick": -199597,
+      "tick_lower": -199740,
+      "tick_upper": -199440,
+      "in_range": true,
+      "last_in_range": true,
+      "last_checked_utc": "2026-03-21T17:18:20.866725+00:00",
+      "token0": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+      "token1": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+      "fee": 3000,
+      "symbol0": "WETH",
+      "symbol1": "USDC"
+    }
+  }
+}

@@ -1,0 +1,16 @@
+[Unit]
+Description=Uniswap V3 Position Monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/mnt/d/dev_projects/posmon
+EnvironmentFile=/mnt/d/dev_projects/posmon/.env
+ExecStart=/mnt/d/dev_projects/posmon/.venv/bin/python /mnt/d/dev_projects/posmon/monitor_position.py
+Restart=always
+RestartSec=15
+User=REPLACE_WITH_WSL_USERNAME
+
+[Install]
+WantedBy=multi-user.target
