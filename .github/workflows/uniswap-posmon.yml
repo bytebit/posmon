@@ -40,14 +40,14 @@ jobs:
           BASE_POSITION_IDS=${{ secrets.BASE_POSITION_IDS }}
 
           # Check interval
-          CHECK_INTERVAL_SECONDS=${{ secrets.CHECK_INTERVAL_SECONDS }}
-          ALERT_ON_START=${{ secrets.ALERT_ON_START }}
+          CHECK_INTERVAL_SECONDS=${{ secrets.CHECK_INTERVAL_SECONDS || '300' }}
+          ALERT_ON_START=${{ secrets.ALERT_ON_START || 'false' }}
 
           # Asset digest
-          ASSET_DIGEST_ENABLED=${{ secrets.ASSET_DIGEST_ENABLED }}
-          ASSET_DIGEST_TIMES=${{ secrets.ASSET_DIGEST_TIMES }}
-          ASSET_DIGEST_TOP_N=${{ secrets.ASSET_DIGEST_TOP_N }}
-          LOCAL_TZ=${{ secrets.LOCAL_TZ }}
+          ASSET_DIGEST_ENABLED=${{ secrets.ASSET_DIGEST_ENABLED || 'false' }}
+          ASSET_DIGEST_TIMES=${{ secrets.ASSET_DIGEST_TIMES || '11:00' }}
+          ASSET_DIGEST_TOP_N=${{ secrets.ASSET_DIGEST_TOP_N || '10' }}
+          LOCAL_TZ=${{ secrets.LOCAL_TZ || 'Asia/Shanghai' }}
 
           # SMTP Email
           SMTP_HOST=${{ secrets.SMTP_HOST }}
