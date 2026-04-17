@@ -1,0 +1,62 @@
+name: Uniswap V3 Position Monitor
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'  # 每5分钟执行一次
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  monitor-position:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Create .env file
+        run: |
+          cat > .env << 'EOL'
+          # Arbitrum RPC
+          ARB_RPC_URL=${{ secrets.ARB_RPC_URL }}
+          ARBITRUM_RPC_URL=${{ secrets.ARBITRUM_RPC_URL }}
+
+          # Position IDs
+          POSITION_ID=${{ secrets.POSITION_ID }}
+          POSITION_IDS=${{ secrets.POSITION_IDS }}
+          ARBITRUM_POSITION_IDS=${{ secrets.ARBITRUM_POSITION_IDS }}
+          BASE_POSITION_IDS=${{ secrets.BASE_POSITION_IDS }}
+
+          # Base RPC
+          BASE_RPC_URL=${{ secrets.BASE_RPC_URL }}
+
+          # Check interval
+          CHECK_INTERVAL_SECONDS=${{ secrets.CHECK_INTERVAL_SECONDS }}
+          ALERT_ON_START=${{ secrets.ALERT_ON_START }}
+
+          # Asset digest
+          ASSET_DIGEST_ENABLED=${{ secrets.ASSET_DIGEST_ENABLED }}
+          ASSET_DIGEST_TIMES=${{ secrets.ASSET_DIGEST_TIMES }}
+          ASSET_DIGEST_TOP_N=${{ secrets.ASSET_DIGEST_TOP_N }}
+          LOCAL_TZ=${{ secrets.LOCAL_TZ }}
+
+          # SMTP Email
+          SMTP_HOST=${{ secrets.SMTP_HOST }}
+          SMTP_PORT=${{ secrets.SMTP_PORT }}
+          SMTP_USER=${{ secrets.SMTP_USER }}
+          SMTP_PASS=${{ secrets.SMTP_PASS }}
+          SMTP_USE_TLS=${{ secrets.SMTP_USE_TLS }}
+          SMTP_USE_SSL=${{ secrets.SMTP_USE_SSL }}
+          EMAIL_FROM=${{ secrets.EMAIL_FROM }}
+          EMAIL_TO=${{ secrets.EMAIL_TO }}
+          EOL
+
+      - name: Run position monitor
+        run: python monitor_position.py --once
