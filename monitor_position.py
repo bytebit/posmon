@@ -39,7 +39,7 @@ CHAIN_CONFIGS = {
         "position_manager": "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
         "factory": "0x1F98431c8aD98523631AE4a59f267346ea31F984",
         "rpc_env_keys": ["ARB_RPC_URL", "ARBITRUM_RPC_URL"],
-        "position_env_keys": ["ARBITRUM_POSITION_IDS", "POSITION_IDS", "POSITION_ID"],
+        "position_env_keys": ["POSITION_IDS"],
     },
     "base": {
         "chain_id": 8453,
@@ -524,13 +524,11 @@ def load_chain_clients() -> list:
                 break
 
         # If Base is configured but no Base-specific ids provided,
-        # allow fallback to POSITION_IDS/POSITION_ID only when Arbitrum is not configured.
+        # allow fallback to POSITION_IDS only when Arbitrum is not configured.
         if name == "base" and not position_ids:
             has_arbitrum_rpc = any(os.getenv(k) for k in CHAIN_CONFIGS["arbitrum"]["rpc_env_keys"])
             if not has_arbitrum_rpc:
                 position_ids = parse_position_ids(os.getenv("POSITION_IDS")) or []
-                if not position_ids and os.getenv("POSITION_ID"):
-                    position_ids = [int(os.getenv("POSITION_ID"))]
 
         if not position_ids:
             continue

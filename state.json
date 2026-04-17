@@ -38,6 +38,25 @@
         "symbol0": "WETH",
         "symbol1": "USDC"
       }
+    },
+    "base": {
+      "4855564": {
+        "token_id": 4855564,
+        "tick": -198592,
+        "tick_lower": -199920,
+        "tick_upper": -199380,
+        "in_range": false,
+        "last_in_range": false,
+        "last_checked_utc": "2026-04-17T12:54:50.866113+00:00",
+        "token0": "0x4200000000000000000000000000000000000006",
+        "token1": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "fee": 3000,
+        "symbol0": "WETH",
+        "symbol1": "USDC"
+      }
     }
+  },
+  "asset_digest_last_sent": {
+    "11:00": "2026-04-17"
   }
 }
