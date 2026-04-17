@@ -10,19 +10,45 @@ from typing import Any, Dict, Optional, Tuple
 from dotenv import load_dotenv
 import requests
 from web3 import Web3
-from zoneinfo import ZoneInfo
+try:
+    from zoneinfo import ZoneInfo
+except Exception:  # Python < 3.9
+    from backports.zoneinfo import ZoneInfo
 
 
-STATE_PATH = os.path.join(os.path.dirname(__file__), "state.json")
+DEFAULT_STATE_PATH = os.path.join(os.path.dirname(__file__), "state.json")
+STATE_PATH = os.getenv("STATE_PATH", DEFAULT_STATE_PATH)
+
+# Web3 compatibility helpers (v5/v6)
+def to_checksum(addr: str) -> str:
+    if hasattr(Web3, "to_checksum_address"):
+        return Web3.to_checksum_address(addr)
+    return Web3.toChecksumAddress(addr)
+
+
+def to_text(value: bytes) -> str:
+    if hasattr(Web3, "to_text"):
+        return Web3.to_text(value)
+    return Web3.toText(value)
 YIELDS_API = "https://yields.llama.fi/pools"
 
-# Uniswap V3 Arbitrum official deployment addresses
-NONFUNGIBLE_POSITION_MANAGER = Web3.to_checksum_address(
-    "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
-)
-UNISWAP_V3_FACTORY = Web3.to_checksum_address(
-    "0x1F98431c8aD98523631AE4a59f267346ea31F984"
-)
+# Uniswap V3 official deployment addresses per chain
+CHAIN_CONFIGS = {
+    "arbitrum": {
+        "chain_id": 42161,
+        "position_manager": "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
+        "factory": "0x1F98431c8aD98523631AE4a59f267346ea31F984",
+        "rpc_env_keys": ["ARB_RPC_URL", "ARBITRUM_RPC_URL"],
+        "position_env_keys": ["ARBITRUM_POSITION_IDS", "POSITION_IDS", "POSITION_ID"],
+    },
+    "base": {
+        "chain_id": 8453,
+        "position_manager": "0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1",
+        "factory": "0x33128a8fC17869897dcE68Ed026d694621f6FDfD",
+        "rpc_env_keys": ["BASE_RPC_URL"],
+        "position_env_keys": ["BASE_POSITION_IDS"],
+    },
+}
 
 POSITION_MANAGER_ABI = [
     {
@@ -126,8 +152,23 @@ def load_state() -> Dict[str, Any]:
 
 
 def save_state(state: Dict[str, Any]) -> None:
-    with open(STATE_PATH, "w", encoding="utf-8") as f:
-        json.dump(state, f, ensure_ascii=True, indent=2)
+    global STATE_PATH
+    try:
+        with open(STATE_PATH, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=True, indent=2)
+    except PermissionError:
+        # Fallback to a user-writable location
+        fallback = os.path.expanduser("~/.posmon_state.json")
+        if STATE_PATH != fallback:
+            print(
+                f"[{now_utc()}] state.json not writable, falling back to {fallback}",
+                flush=True,
+            )
+            STATE_PATH = fallback
+            with open(STATE_PATH, "w", encoding="utf-8") as f:
+                json.dump(state, f, ensure_ascii=True, indent=2)
+        else:
+            raise
 
 
 def str_to_bool(value: Optional[str], default: bool = False) -> bool:
@@ -169,15 +210,16 @@ def send_email(subject: str, body: str, cfg: Dict[str, str]) -> None:
 
 
 def get_position_data(
-    w3: Web3, token_id: int
+    w3: Web3, token_id: int, position_manager_addr: str
 ) -> Tuple[str, str, int, int, int]:
     position_manager = w3.eth.contract(
-        address=NONFUNGIBLE_POSITION_MANAGER, abi=POSITION_MANAGER_ABI
+        address=to_checksum(position_manager_addr),
+        abi=POSITION_MANAGER_ABI,
     )
     pos = position_manager.functions.positions(token_id).call()
 
-    token0 = Web3.to_checksum_address(pos[2])
-    token1 = Web3.to_checksum_address(pos[3])
+    token0 = to_checksum(pos[2])
+    token1 = to_checksum(pos[3])
     fee = int(pos[4])
     tick_lower = int(pos[5])
     tick_upper = int(pos[6])
@@ -185,12 +227,14 @@ def get_position_data(
     return token0, token1, fee, tick_lower, tick_upper
 
 
-def get_current_tick(w3: Web3, token0: str, token1: str, fee: int) -> int:
-    factory = w3.eth.contract(address=UNISWAP_V3_FACTORY, abi=FACTORY_ABI)
+def get_current_tick(
+    w3: Web3, token0: str, token1: str, fee: int, factory_addr: str
+) -> int:
+    factory = w3.eth.contract(address=to_checksum(factory_addr), abi=FACTORY_ABI)
     pool = factory.functions.getPool(token0, token1, fee).call()
     if pool == "0x0000000000000000000000000000000000000000":
         raise RuntimeError("Pool not found for the position (factory.getPool returned 0x0).")
-    pool = Web3.to_checksum_address(pool)
+    pool = to_checksum(pool)
     pool_contract = w3.eth.contract(address=pool, abi=POOL_ABI)
     slot0 = pool_contract.functions.slot0().call()
     return int(slot0[1])
@@ -200,7 +244,7 @@ def get_token_symbol(w3: Web3, token: str) -> str:
     if token in SYMBOL_CACHE:
         return SYMBOL_CACHE[token]
 
-    addr = Web3.to_checksum_address(token)
+    addr = to_checksum(token)
     symbol = None
     try:
         contract = w3.eth.contract(address=addr, abi=ERC20_SYMBOL_STRING_ABI)
@@ -211,7 +255,7 @@ def get_token_symbol(w3: Web3, token: str) -> str:
             contract = w3.eth.contract(address=addr, abi=ERC20_SYMBOL_BYTES32_ABI)
             symbol_bytes = contract.functions.symbol().call()
             if isinstance(symbol_bytes, (bytes, bytearray)):
-                symbol = Web3.to_text(symbol_bytes).strip("\x00")
+                symbol = to_text(symbol_bytes).strip("\x00")
         except Exception:
             symbol = None
 
@@ -233,10 +277,12 @@ def build_email_body(
     sym0: str,
     sym1: str,
     fee: int,
+    chain_name: str,
 ) -> str:
     status = "IN RANGE" if in_range else "OUT OF RANGE"
     return (
         f"Uniswap V3 Position {token_id} status: {status}\n"
+        f"Chain: {chain_name}\n"
         f"Pool: {sym0}/{sym1} (fee {fee})\n"
         f"Token0: {token0} ({sym0})\n"
         f"Token1: {token1} ({sym1})\n"
@@ -332,14 +378,20 @@ def load_email_config() -> Dict[str, str]:
 def should_send_digest(state: Dict[str, Any], tz_name: str, times: list) -> Optional[str]:
     now = now_local(tz_name)
     today = now.date().isoformat()
-    hhmm = now.strftime("%H:%M")
-    if hhmm not in times:
-        return None
-
     last_sent = state.get("asset_digest_last_sent", {})
-    if last_sent.get(hhmm) == today:
-        return None
-    return hhmm
+
+    # Send once per scheduled time per day, as soon as we pass that time.
+    for t in times:
+        try:
+            hour, minute = [int(x) for x in t.split(":")]
+        except Exception:
+            continue
+        if last_sent.get(t) == today:
+            continue
+        scheduled = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if now >= scheduled:
+            return t
+    return None
 
 
 def run_asset_digest(email_cfg: Dict[str, str]) -> None:
@@ -353,19 +405,24 @@ def run_asset_digest(email_cfg: Dict[str, str]) -> None:
 
 def check_once(
     w3: Web3,
+    chain_name: str,
     token_id: int,
     email_cfg: Dict[str, str],
+    position_manager_addr: str,
+    factory_addr: str,
     digest_text: Optional[str] = None,
 ) -> bool:
     global START_ALERT_SENT
-    token0, token1, fee, tick_lower, tick_upper = get_position_data(w3, token_id)
-    tick = get_current_tick(w3, token0, token1, fee)
+    token0, token1, fee, tick_lower, tick_upper = get_position_data(
+        w3, token_id, position_manager_addr
+    )
+    tick = get_current_tick(w3, token0, token1, fee, factory_addr)
     sym0 = get_token_symbol(w3, token0)
     sym1 = get_token_symbol(w3, token1)
 
     in_range = tick_lower <= tick < tick_upper
     print(
-        f"[{now_utc()}] token_id={token_id} token0={token0}({sym0}) "
+        f"[{now_utc()}] chain={chain_name} token_id={token_id} token0={token0}({sym0}) "
         f"token1={token1}({sym1}) fee={fee} "
         f"tick={tick} range=[{tick_lower},{tick_upper}) "
         f"status={'IN' if in_range else 'OUT'}",
@@ -373,13 +430,15 @@ def check_once(
     )
     state = load_state()
     positions = state.get("positions", {})
-    pos_state = positions.get(str(token_id), {})
+    chain_positions = positions.get(chain_name, {})
+    pos_state = chain_positions.get(str(token_id), {})
     last_in_range = pos_state.get("last_in_range")
 
     should_notify = False
-    if str_to_bool(os.getenv("ALERT_ON_START"), False) and not START_ALERT_SENT.get(token_id):
+    start_key = f"{chain_name}:{token_id}"
+    if str_to_bool(os.getenv("ALERT_ON_START"), False) and not START_ALERT_SENT.get(start_key):
         should_notify = True
-        START_ALERT_SENT[token_id] = True
+        START_ALERT_SENT[start_key] = True
         print(f"[{now_utc()}] ALERT_ON_START enabled -> sending initial email", flush=True)
     elif last_in_range is None:
         should_notify = False
@@ -388,7 +447,8 @@ def check_once(
 
     email_sent = False
     if should_notify:
-        subject = f"[Uniswap V3] Position {token_id} {('IN' if in_range else 'OUT OF')} RANGE"
+        event_label = "Back-in-Range" if in_range else "Out-of-Range"
+        subject = f"[Uniswap V3] {chain_name} Position {token_id} {event_label}"
         body = build_email_body(
             token_id,
             tick,
@@ -400,6 +460,7 @@ def check_once(
             sym0,
             sym1,
             fee,
+            chain_name,
         )
         if digest_text:
             body = f"{body}\n\n---\n\n{digest_text}"
@@ -418,7 +479,7 @@ def check_once(
     else:
         print(f"[{now_utc()}] email not sent (no status change)", flush=True)
 
-    positions[str(token_id)] = {
+    chain_positions[str(token_id)] = {
         "token_id": token_id,
         "tick": tick,
         "tick_lower": tick_lower,
@@ -432,9 +493,69 @@ def check_once(
         "symbol0": sym0,
         "symbol1": sym1,
     }
+    positions[chain_name] = chain_positions
     state["positions"] = positions
     save_state(state)
     return email_sent
+
+
+def parse_position_ids(value: Optional[str]) -> list:
+    if not value:
+        return []
+    return [int(x.strip()) for x in value.split(",") if x.strip()]
+
+
+def load_chain_clients() -> list:
+    chains = []
+    for name, cfg in CHAIN_CONFIGS.items():
+        rpc_url = None
+        for key in cfg["rpc_env_keys"]:
+            if os.getenv(key):
+                rpc_url = os.getenv(key)
+                break
+        if not rpc_url:
+            continue
+
+        # Determine position ids for this chain
+        position_ids: list = []
+        for key in cfg["position_env_keys"]:
+            position_ids = parse_position_ids(os.getenv(key))
+            if position_ids:
+                break
+
+        # If Base is configured but no Base-specific ids provided,
+        # allow fallback to POSITION_IDS/POSITION_ID only when Arbitrum is not configured.
+        if name == "base" and not position_ids:
+            has_arbitrum_rpc = any(os.getenv(k) for k in CHAIN_CONFIGS["arbitrum"]["rpc_env_keys"])
+            if not has_arbitrum_rpc:
+                position_ids = parse_position_ids(os.getenv("POSITION_IDS")) or []
+                if not position_ids and os.getenv("POSITION_ID"):
+                    position_ids = [int(os.getenv("POSITION_ID"))]
+
+        if not position_ids:
+            continue
+
+        w3 = Web3(Web3.HTTPProvider(rpc_url))
+        is_connected = w3.is_connected() if hasattr(w3, "is_connected") else w3.isConnected()
+        if not is_connected:
+            raise RuntimeError(f"Unable to connect to {name} RPC.")
+
+        chain_id = w3.eth.chain_id
+        if chain_id != cfg["chain_id"]:
+            raise RuntimeError(
+                f"Unexpected chain id {chain_id} for {name}. Expected {cfg['chain_id']}."
+            )
+
+        chains.append(
+            {
+                "name": name,
+                "w3": w3,
+                "position_ids": position_ids,
+                "position_manager": cfg["position_manager"],
+                "factory": cfg["factory"],
+            }
+        )
+    return chains
 
 
 def main() -> None:
@@ -448,15 +569,6 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    rpc_url = os.getenv("ARB_RPC_URL")
-    if not rpc_url:
-        raise RuntimeError("Missing ARB_RPC_URL in environment.")
-
-    raw_ids = os.getenv("POSITION_IDS", "").strip()
-    if raw_ids:
-        token_ids = [int(x.strip()) for x in raw_ids.split(",") if x.strip()]
-    else:
-        token_ids = [int(os.getenv("POSITION_ID", "5382694"))]
     interval_seconds = int(os.getenv("CHECK_INTERVAL_SECONDS", "60"))
     asset_digest_enabled = str_to_bool(os.getenv("ASSET_DIGEST_ENABLED"), False)
     asset_digest_times = [
@@ -464,13 +576,11 @@ def main() -> None:
     ]
     local_tz = os.getenv("LOCAL_TZ", "Asia/Shanghai")
 
-    w3 = Web3(Web3.HTTPProvider(rpc_url))
-    if not w3.is_connected():
-        raise RuntimeError("Unable to connect to Arbitrum RPC.")
-
-    chain_id = w3.eth.chain_id
-    if chain_id != 42161:
-        raise RuntimeError(f"Unexpected chain id {chain_id}. Expected 42161 for Arbitrum.")
+    chains = load_chain_clients()
+    if not chains:
+        raise RuntimeError(
+            "No chains configured. Set ARB_RPC_URL/POSITION_IDS or BASE_RPC_URL/BASE_POSITION_IDS."
+        )
 
     email_cfg = load_email_config()
     digest_text_once: Optional[str] = None
@@ -487,9 +597,18 @@ def main() -> None:
     while True:
         try:
             any_alert_sent = False
-            for token_id in token_ids:
-                sent = check_once(w3, token_id, email_cfg, digest_text=digest_text_once)
-                any_alert_sent = any_alert_sent or sent
+            for chain in chains:
+                for token_id in chain["position_ids"]:
+                    sent = check_once(
+                        chain["w3"],
+                        chain["name"],
+                        token_id,
+                        email_cfg,
+                        chain["position_manager"],
+                        chain["factory"],
+                        digest_text=digest_text_once,
+                    )
+                    any_alert_sent = any_alert_sent or sent
 
             if asset_digest_enabled:
                 state = load_state()

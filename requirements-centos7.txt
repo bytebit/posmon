@@ -1,0 +1,4 @@
+python-dotenv==0.20.0
+requests==2.27.1
+web3==5.31.3
+backports.zoneinfo==0.2.1

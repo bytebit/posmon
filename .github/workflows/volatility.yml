@@ -1,0 +1,44 @@
+name: Volatility Top 10
+
+on:
+  schedule:
+    - cron: '0 11 * * *'  # 每天 UTC 11:00 执行（对应北京时间 19:00）
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  run-volatility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Create .env file
+        run: |
+          cat > .env << 'EOL'
+          SMTP_HOST=${{ secrets.SMTP_HOST }}
+          SMTP_PORT=${{ secrets.SMTP_PORT }}
+          SMTP_USER=${{ secrets.SMTP_USER }}
+          SMTP_PASS=${{ secrets.SMTP_PASS }}
+          SMTP_USE_TLS=${{ secrets.SMTP_USE_TLS }}
+          SMTP_USE_SSL=${{ secrets.SMTP_USE_SSL }}
+          EMAIL_FROM=${{ secrets.EMAIL_FROM }}
+          EMAIL_TO=${{ secrets.EMAIL_TO }}
+          EOL
+      
+      - name: Run volatility script
+        run: python volatility_top10.py --email
+      
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: volatility-results
+          path: volatility_top10.json

@@ -1,6 +1,6 @@
-# Uniswap V3 Position Monitor (Arbitrum)
+# Uniswap V3 Position Monitor (Arbitrum + Base)
 
-This script checks a Uniswap V3 position on Arbitrum and emails you when the position goes out of range (or re-enters range).
+This script checks Uniswap V3 positions on Arbitrum and Base and emails you when any position goes out of range (or re-enters range).
 
 ## Setup
 
@@ -12,12 +12,23 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+On CentOS 7, install the CentOS-specific dependency set:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-centos7.txt
+```
+
 2. Create a `.env` file (copy from `.env.example`) and fill in:
 
 - `ARB_RPC_URL` (your Alchemy URL)
 - `POSITION_ID` for a single position, or `POSITION_IDS` for multiple (comma-separated)
+- Optional: `ARBITRUM_POSITION_IDS` to override the Arbitrum list explicitly
+- Optional: `BASE_RPC_URL` and `BASE_POSITION_IDS` to monitor Base positions
 - SMTP settings
 - `EMAIL_FROM` / `EMAIL_TO` (comma-separated for multiple recipients)
+- `LOCAL_TZ=Asia/Shanghai`
 
 ### Daily pool digest (11:00 & 23:00)
 
@@ -33,13 +44,13 @@ Env vars:
 ## Run
 
 ```bash
-python monitor_position.py
+.venv/bin/python monitor_position.py
 ```
 
 Single check (exit after one run):
 
 ```bash
-python monitor_position.py --once
+.venv/bin/python monitor_position.py --once
 ```
 
 The script writes a `state.json` file with the last observed status and errors.
@@ -122,6 +133,37 @@ sudo systemctl enable --now uniswap-posmon.service
 ```
 
 3. Check status and logs:
+
+```bash
+sudo systemctl status uniswap-posmon.service
+journalctl -u uniswap-posmon.service -f
+```
+
+## CentOS systemd service (non-WSL)
+
+1. Install Python and create a venv:
+
+```bash
+sudo yum install -y python3 python3-pip
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-centos7.txt
+```
+
+2. Copy the service file to your server and edit paths:
+
+- Update `WorkingDirectory`, `EnvironmentFile`, and `ExecStart` to your Linux path.
+- Replace `User=REPLACE_WITH_WSL_USERNAME` with your Linux username.
+
+3. Install and start:
+
+```bash
+sudo cp /path/to/uniswap-posmon.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now uniswap-posmon.service
+```
+
+4. Check status and logs:
 
 ```bash
 sudo systemctl status uniswap-posmon.service
