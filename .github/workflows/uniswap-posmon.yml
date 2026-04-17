@@ -29,13 +29,11 @@ jobs:
           ARBITRUM_RPC_URL=${{ secrets.ARBITRUM_RPC_URL }}
 
           # Position IDs
-          POSITION_ID=${{ secrets.POSITION_ID }}
           POSITION_IDS=${{ secrets.POSITION_IDS }}
-          ARBITRUM_POSITION_IDS=${{ secrets.ARBITRUM_POSITION_IDS }}
-          BASE_POSITION_IDS=${{ secrets.BASE_POSITION_IDS }}
 
           # Base RPC
           BASE_RPC_URL=${{ secrets.BASE_RPC_URL }}
+          BASE_POSITION_IDS=${{ secrets.BASE_POSITION_IDS }}
 
           # Check interval
           CHECK_INTERVAL_SECONDS=${{ secrets.CHECK_INTERVAL_SECONDS }}
