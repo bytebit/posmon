@@ -5,6 +5,7 @@ import json
 import smtplib
 from email.mime.text import MIMEText
 from typing import List, Dict, Any
+from dotenv import load_dotenv
 
 COINGECKO_API_URL = "https://api.coingecko.com/api/v3/coins/markets"
 
@@ -128,6 +129,8 @@ def main():
     """
     主函数
     """
+    load_dotenv()
+    
     parser = argparse.ArgumentParser(description="获取过去24小时内波动最大的加密货币Top 10")
     parser.add_argument("--email", action="store_true", help="是否发送邮件")
     parser.add_argument("--smtp-host", default=os.getenv("SMTP_HOST"), help="SMTP服务器地址")
